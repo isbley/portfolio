@@ -85,9 +85,9 @@ ADD FOREIGN KEY(TYPE) REFERENCES standtbl(TYPE);
 
 # memtbl insert
 INSERT INTO memtbl VALUES('20231852', '전해달', '1852', 'BG01'),
-									('20232475', '김수달', '2475', 'BG02'),
-									('20233192', '이토끼', '3192', 'BG03'),
-									('20234753', '박거북', '4753', 'BG04');
+			('20232475', '김수달', '2475', 'BG02'),
+			('20233192', '이토끼', '3192', 'BG03'),
+			('20234753', '박거북', '4753', 'BG04');
 									
 # standtbl insert
 INSERT INTO standtbl VALUES('BG-F17J', 12, 16, 173, 2, 1, 1, 15);
