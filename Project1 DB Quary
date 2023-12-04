@@ -36,7 +36,8 @@ CREATE TABLE memtbl  -- 사원 테이블
 (	managerNum CHAR(8) NOT NULL PRIMARY KEY,  -- 사용자 아이디(PK)
 	NAME CHAR(4) NOT NULL,  -- 이름
 	extensionNum char(5),  -- 내선 번호
-	beltNum CHAR(4)  -- 벨트 번호
+	beltNum CHAR(4),  -- 벨트 번호
+	PASSWORD char(4) NOT NULL
 );
 
 # standtbl 생성
@@ -54,20 +55,32 @@ CREATE TABLE standtbl  -- 판단 기준 테이블
 # remaketbl 생성
 CREATE TABLE remaketbl  -- 가공 테이블
 (	currentAmount INT(5),  -- 제작수량
-	testScore INT(3) NOT NULL,  -- 테스트 점수
-	defectYorN INT(3),  -- 불량 유무
+	foldSize INT(3),  -- 접었을 때 크기
+	unfoldSize INT(3),  -- 폈을 때 크기
+	weight INT(4),  -- 무게
+	term INT(3),  -- 접었을 때의 간격
+	wellFold INT(3),  -- 잘 접히는지
+	waterProof INT(3),  -- 방수 잘 되는지
+	keyTest INT(3),  -- 키테스트
+	defect1or0 INT(3),  -- 불량 유무
 	FOREIGN KEY(currentAmount) REFERENCES colltbl(currentAmount)  -- FK
 );
 
 # finaltbl 생성
 CREATE TABLE finaltbl  -- 최종 테이블
-(	targetAmount INT(4),  -- 목표수량
-	good INT(4),  -- 테스트 점수 95점 이상의 제품 수량
-	bad INT(4),  -- 테스트 점수 95 미만의 제품 수량
+(	targetAmount INT(5),  -- 목표수량
+	good INT(5),  -- 테스트 점수 95점 이상의 제품 수량
+	bad INT(5),  -- 테스트 점수 95 미만의 제품 수량
 	defectPercent FLOAT,  -- 불량률
 	currentAmount INT(5),  -- 제작수량
-	currentTime TIME,  -- 최종 테이블 업데이트한 시간
-	FOREIGN KEY(currentAmount) REFERENCES colltbl(currentAmount)  -- Fk
+	currentTime TIME,		-- 최종 테이블 업데이트한 시간
+	sumFoldsize INT(5),	-- 접었을 때 크기 불량 누적 개수
+	sumUnfoldsize INT(5),	-- 안 접었을 때 크기 불량 누적 개수
+	sumWeight INT(5),		-- 무게 불량 누적 개수
+	sumTerm INT(5),	-- 간격 불량 누적 개수
+	sumWellfold INT(5),	-- 잘 접히는지에 대한 불량 누적 개수
+	sumWaterproof INT(5),	-- 방수 불량 누적 개수
+	sumKeytest INT(5)		-- 키 눌림 불량 누적 개수
 );
 
 
@@ -81,38 +94,28 @@ ADD FOREIGN KEY(TYPE) REFERENCES standtbl(TYPE);
 
 
 
-# ------------------------------------------- 값 insert -------------------------------------------------
+# ------------------------------------------- 초깃값 insert -------------------------------------------------
 
 # memtbl insert
-INSERT INTO memtbl VALUES('20231852', '전해달', '1852', 'BG01'),
-			('20232475', '김수달', '2475', 'BG02'),
-			('20233192', '이토끼', '3192', 'BG03'),
-			('20234753', '박거북', '4753', 'BG04');
+INSERT INTO memtbl VALUES('20231852', '전해달', '1852', 'BG01', '1234'),
+									('20232475', '김수달', '2475', 'BG02', '1357'),
+									('20233192', '이토끼', '3192', 'BG03', '1111'),
+									('20234753', '박거북', '4753', 'BG04', '1004');
 									
 # standtbl insert
 INSERT INTO standtbl VALUES('BG-F17J', 12, 16, 173, 2, 1, 1, 15);
 
 # colltbl insert
-INSERT INTO colltbl VALUES(NULL, 12, 15, 173, 2, 1, 1, 15);
+INSERT INTO colltbl VALUES(NULL, 12, 16, 173, 2, 1, 1, 15);
 
 # prodtbl insert
 INSERT INTO prodtbl VALUES (1, 'BG-F17J', CURTIME(), CURDATE(), 'BG01', '20231852');
 
 # remaketbl insert
-INSERT INTO remaketbl VALUES(1, 220, 1);
+INSERT INTO remaketbl VALUES(1, 0, 0, 0, 0, 0, 0, 0, 0);
 
 # finaltbl insert
-INSERT INTO finaltbl VALUES(1000, 1, 0, 0, 1, CURTIME());
-
-# ---------------------------------------------------------------------------------------------------------
-
-# 2차 생성 보완
-ALTER TABLE memtbl
-ADD PASSWORD char(4) NOT NULL;	 -- 열 추가
-UPDATE memtbl SET PASSWORD = '1234' WHERE NAME = '전해달';		-- 데이터 추가
-UPDATE memtbl SET PASSWORD = '1357' WHERE NAME = '김수달';		-- 데이터 추가
-UPDATE memtbl SET	PASSWORD = '1111' WHERE NAME = '이토끼';		-- 데이터 추가
-UPDATE memtbl SET	PASSWORD = '1004' WHERE NAME = '박거북';		-- 데이터 추가
+INSERT INTO finaltbl VALUES(10000, 1, 0, 0, 1, CURTIME(), 0, 0, 0, 0, 0, 0, 0);
 
 # ---------------------------------------------------------------------------------------------------------
 
@@ -121,19 +124,6 @@ UPDATE memtbl SET	PASSWORD = '1004' WHERE NAME = '박거북';		-- 데이터 추�
 
 
 # ------------------------------------------- 트리거 생성 -------------------------------------------------
-# 첫 번째 트리거 생성 / prod 테이블에 데이터가 입력되었을 때 coll 테이블이 변함
-DELIMITER //
-CREATE TRIGGER prod2coll
-AFTER INSERT ON prodtbl FOR EACH ROW
-BEGIN
-	INSERT INTO colltbl (currentAmount,	prodNum, foldSize, unfoldSize, weight,	term, wellFold, waterProof, keyTest)
-	VALUES(NULL, NEW.prodNum, 9, 15, 172, 2, 1, 0, 1);
-	
-END;
-//
-DELIMITER;
-
-
 # 첫 번째 트리거 생성 / coll 테이블에 데이터가 입력되었을 때 prod 테이블이 변함
 DELIMITER //
 CREATE TRIGGER coll2prod
@@ -146,47 +136,118 @@ DELIMITER;
 
 
 
-# 두 번째 트리거 생성 / coll 테이블에 데이터가 입력되었을 때 colltbl 값 합쳐서 remake tbl 만들기
+# 두 번째 트리거 생성 / coll 테이블에 데이터가 입력되었을 때 각각 불량을 판단해서 coll2remake trigger 만들기
 DELIMITER //
 CREATE TRIGGER coll2remake
 AFTER INSERT ON colltbl FOR EACH ROW
 BEGIN
-	DECLARE testScore INT;
-		SET testScore = (NEW.foldSize + NEW.unfoldSize + NEW.weight + NEW.term + NEW.keyTest);	
-	IF NEW.foldSize != 12 then
-		INSERT INTO remaketbl VALUES (NEW.currentAmount, testScore, 0);
-	ELSEIF NEW.unfoldSize != 16 then
-		INSERT INTO remaketbl VALUES (NEW.currentAmount, testScore, 0);
-	ELSEIF NEW.weight != 173 then
-		INSERT INTO remaketbl VALUES (NEW.currentAmount, testScore, 0);
-	ELSEIF NEW.term != 2 then
-		INSERT INTO remaketbl VALUES (NEW.currentAmount, testScore, 0);
-	ELSEIF NEW.wellFold != 1  then
-		INSERT INTO remaketbl VALUES (NEW.currentAmount, testScore, 0);
-	ELSEIF NEW.waterProof != 1 then
-		INSERT INTO remaketbl VALUES (NEW.currentAmount, testScore, 0);
-	ELSEIF NEW.keyTest != 15 then
-		INSERT INTO remaketbl VALUES (NEW.currentAmount, testScore, 0);
-	ELSE
-		INSERT INTO remaketbl VALUES (NEW.currentAmount, testScore, 1);
-	END IF;
+# 변수 지정
+	DECLARE sfs INT;
+   DECLARE sus INT;
+   DECLARE sw INT;
+   DECLARE st INT;
+   DECLARE swf INT;
+   DECLARE swp INT;
+   DECLARE skt INT;
+   
+   SET sfs = NEW.foldSize;
+	SET sus = NEW.unfoldSize;      
+	SET sw = NEW.weight;
+	SET st = NEW.term;
+	SET swf = NEW.wellFold;
+	SET swp = NEW.waterProof;
+	SET skt = NEW.keyTest;
+	
+	# defect1or0 컬럼 값 조건 쿼리
+	if EXISTS (
+	   SELECT 1
+	   FROM standtbl
+	   WHERE (foldSize != sfs OR unfoldSize != sus OR weight != sw OR term != st OR wellFold != swf OR waterProof != swp OR keyTest != skt)
+	)	THEN
+			INSERT INTO remaketbl VALUES (NEW.currentAmount, 0, 0, 0, 0, 0, 0, 0, 1);
+	ELSE 
+		INSERT INTO remaketbl VALUES (NEW.currentAmount, 0, 0, 0, 0, 0, 0, 0, 0);			
+	END if;
+
+# coll2remake// foldSize부터 비교했을 때의 불량 카운트 쿼리
+
+
+# 불량 항목 update 쿼리				 
+  if EXISTS (
+      SELECT 1
+      FROM standtbl
+      WHERE foldSize != sfs
+	)	THEN
+			UPDATE remaketbl SET foldSize = foldSize + 1 ORDER BY currentAmount DESC LIMIT 1;
+	END if;
+	
+	if EXISTS (
+      SELECT 1
+      FROM standtbl
+      WHERE unfoldSize != sus
+	)	THEN
+			UPDATE remaketbl SET unfoldSize = unfoldSize + 1 ORDER BY currentAmount DESC LIMIT 1;
+	END if;
+			
+			
+	if EXISTS (
+      SELECT 1
+      FROM standtbl
+      WHERE weight != sw
+	)	THEN
+			UPDATE remaketbl SET weight = weight + 1 ORDER BY currentAmount DESC LIMIT 1;
+	END if;
+			
+	if EXISTS (
+      SELECT 1
+      FROM standtbl
+      WHERE term != st
+	)	THEN
+			UPDATE remaketbl SET term = term + 1 ORDER BY currentAmount DESC LIMIT 1;
+	END if;
+			
+	if EXISTS (
+      SELECT 1
+      FROM standtbl
+      WHERE wellFold != swf
+	)	THEN
+			UPDATE remaketbl SET wellFold = wellFold + 1 ORDER BY currentAmount DESC LIMIT 1;
+	END if;
+			
+	if EXISTS (
+      SELECT 1
+      FROM standtbl
+      WHERE waterProof != swp
+	)	THEN
+			UPDATE remaketbl SET waterProof = waterProof + 1 ORDER BY currentAmount DESC LIMIT 1;
+	END if;
+			
+	if EXISTS (
+      SELECT 1
+      FROM standtbl
+      WHERE keyTest != skt
+	)	THEN
+			UPDATE remaketbl SET keyTest = keyTest + 1 ORDER BY currentAmount DESC LIMIT 1;
+	END if;
+
 END;
 //
-DELIMITER;
-
+DELIMITER ;
 
 
 # 세 번째 트리거 생성 / remake 테이블에 데이터가 입력되었을 때 final 테이블 업데이트됨
 DELIMITER //
-CREATE TRIGGER remake2final
+CREATE TRIGGER remake2final1
 AFTER INSERT ON remaketbl FOR EACH ROW
 BEGIN
-	IF (NEW.defectYorN = 1) THEN
+	IF (new.defect1or0 = 0)
+	THEN
 		UPDATE finaltbl SET good = good + 1;
-	ELSEIF (NEW.defectYorN = 0) THEN
+	ELSEIF (new.defect1or0 = 1)
+	THEN
 		UPDATE finaltbl SET bad = bad + 1;
 	END IF;
-	
+
 	UPDATE finaltbl SET defectPercent = ROUND((bad/NEW.currentAmount)*100, 2);
 	UPDATE finaltbl SET currentAmount = NEW.currentAmount;
 	UPDATE finaltbl SET currentTime = CURTIME();
@@ -194,10 +255,27 @@ END;
 //
 DELIMITER;
 
-# ---------------------------------------------------------------------------------------------------------
 
+# 네 번째 트리거 생성 / remake 테이블에서 업데이트 되었을 때 final 테이블 업데이트됨
+DELIMITER //
+CREATE TRIGGER remake2final2
+AFTER UPDATE ON remaketbl FOR EACH ROW
+BEGIN
+	UPDATE finaltbl SET sumFoldsize = (SELECT COUNT(foldSize = 1) FROM remaketbl WHERE foldSize = 1);
+	UPDATE finaltbl SET sumUnfoldsize = (SELECT COUNT(unfoldSize = 1) FROM remaketbl WHERE unfoldSize = 1);
+	UPDATE finaltbl SET sumWeight = (SELECT COUNT(weight = 1) FROM remaketbl WHERE weight = 1);
+	UPDATE finaltbl SET sumTerm = (SELECT COUNT(term = 1) FROM remaketbl WHERE term = 1);
+	UPDATE finaltbl SET sumWellfold = (SELECT COUNT(wellFold = 1) FROM remaketbl WHERE wellFold = 1);
+	UPDATE finaltbl SET sumWaterproof = (SELECT COUNT(waterProof = 1) FROM remaketbl WHERE waterProof = 1);
+	UPDATE finaltbl SET sumKeytest = (SELECT COUNT(keyTest = 1) FROM remaketbl WHERE keyTest = 1);
+END;
+//
+DELIMITER;
 
-
-
-
-DROP database projectdb;
+load DATA LOCAL infile "C:/파일경로/test0824_1.csv"		# 파일 주소
+into table colltbl
+FIELDS TERMINATED BY ','
+ENCLOSED BY '"'
+lines terminated BY '\r\n'
+IGNORE 1 ROWS
+(foldSize, unfoldSize ,weight ,term ,wellFold, waterProof , keyTest);
