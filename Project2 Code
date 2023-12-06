@@ -1,0 +1,175 @@
+# 필요한 모듈 불러오기
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.model_selection import KFold, train_test_split, cross_val_score
+from sklearn.linear_model import LinearRegression, Lasso
+from xgboost import XGBRegressor
+from lightgbm import LGBMRegressor
+
+# 데이터 불러오기
+melting = pd.read_csv(r"C:\bbalgayo\플젝02_0822\2.AI분석모델검증\meltingA.csv", header=0)
+print(melting)
+
+# 컬럼명 정리 (빈 칸을 제거)
+melting.columns = melting.columns.str.replace(' ', '')
+print(melting.head())
+
+# 원하는 값들만 불러와서 새로 저장
+# 평균컬럼, 누적컬럼(유효전력량, 무효전력량)은 제거 후 다시 저장
+melt = melting.loc[:, [ '유효전력', 'A상전압', 'B상전압', 'C상전압', 'A상전류', 'B상전류', 'C상전류', '무효전력', '주파수', '역률']] 
+print(melt)
+
+
+# --------------------- EDA ---------------------
+# 결측치 및 타입 등 데이터 정보 확인
+melt.info()
+print(melt.isna().sum())
+print(melt.describe())
+
+
+# --------------------- EDA 시각화 ---------------------
+# 폰트 나눔바른고딕으로 설정하기
+plt.rcParams['font.family'] = 'NanumBarunGothic'
+
+# 밀도확인
+fig, ((ax1, ax2, ax3, ax4, ax5), (ax6, ax7, ax8, ax9, ax10)) = plt.subplots(2, 5)
+fig.set_size_inches(20, 6)
+plt.subplots_adjust(wspace=0.5, hspace=0.5) # 그래프의 간격을 지정
+sns.histplot(data=melt['유효전력'], kde=True, ax=ax1)
+sns.histplot(data=melt['A상전압'], kde=True, ax=ax2)
+sns.histplot(data=melt['B상전압'], kde=True, ax=ax3)
+sns.histplot(data=melt['C상전압'], kde=True, ax=ax4)
+sns.histplot(data=melt['A상전류'], kde=True, ax=ax5)
+sns.histplot(data=melt['B상전류'], kde=True, ax=ax6)
+sns.histplot(data=melt['C상전류'], kde=True, ax=ax7)
+sns.histplot(data=melt['무효전력'], kde=True, ax=ax8)
+sns.histplot(data=melt['주파수'], kde=True, ax=ax9)
+sns.histplot(data=melt['역률'], kde=True, ax=ax10)
+plt.show()
+
+# 이상치 확인(시각화)
+fig, ((ax1, ax2, ax3, ax4, ax5), (ax6, ax7, ax8, ax9, ax10)) = plt.subplots(2, 5)
+fig.set_size_inches(20, 6)
+plt.subplots_adjust(wspace=0.5, hspace=0.5) #그래프의 간격을 지정
+sns.boxplot(y=melt['유효전력'], ax=ax1)
+sns.boxplot(y=melt['A상전압'],  ax=ax2)
+sns.boxplot(y=melt['B상전압'], ax=ax3)
+sns.boxplot(y=melt['C상전압'], ax=ax4)
+sns.boxplot(y=melt['A상전류'],  ax=ax5)
+sns.boxplot(y=melt['B상전류'],ax=ax6)
+sns.boxplot(y=melt['C상전류'], ax=ax7)
+sns.boxplot(y=melt['무효전력'], ax=ax8)
+sns.boxplot(y=melt['주파수'],  ax=ax9)
+sns.boxplot(y=melt['역률'], ax=ax10)
+plt.show()
+
+
+# --------------------- 상관분석 ---------------------
+melt_corr = melt.corr(method='pearson', numeric_only=True)
+print(melt_corr)
+
+# 상관관계 정렬
+print("#-----양의 상관관계 내림차순")
+print(melt_corr.loc[melt_corr['무효전력']>0, '무효전력'].sort_values(ascending=False, inplace=False))
+print("#-----음의 상관관계 내림차순")
+print(melt_corr.loc[melt_corr['무효전력']<0, '무효전력'].sort_values(ascending=False, inplace=False))
+
+# --------------------- 상관계수 결과 ---------------------
+# C상전류 0.957161 / 유효전력 0.879512 / B상전류 0.815455
+# A상전류 0.659486 / A상전압 0.162936 / 역률 0.680898
+# B상전압 -0.221790 / C상전압 -0.238865 / 주파수 -0.067380
+
+# 상관관계 시각화
+plt.figure(figsize=(10, 8))
+sns.heatmap(melt_corr, linecolor='white', linewidths=0.1, annot=True, square=True)
+plt.show()
+
+
+# --------------------- 예측 ---------------------
+# 독립변수 종속변수 분류
+X = melt.loc[:, ['유효전력', 'A상전압', 'B상전압', 'C상전압', 'A상전류', 'B상전류', 'C상전류', '주파수', '역률']]
+Y = melt.loc[:, ['무효전력']] 
+
+# 테스트 / 훈련 데이터 분류
+X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.3, random_state=87)
+print("훈련데이터 독립변수 세트 사이즈 :", X_train.shape)
+print("테스트데이터 독립변수 세트 사이즈 :", X_test.shape)
+print("훈련데이터 종속변수 사이즈 :", y_train.shape)
+print("테스트데이터 종속변수 사이즈 :", y_test.shape)
+
+
+# --------------------- 모델링 ---------------------
+lr = LinearRegression()
+lasso = Lasso(alpha = 10)
+xgb_reg = XGBRegressor(n_estimators=1000, learning_rate=0.05)       # 기본학습기의 개수
+lgb_reg = LGBMRegressor(n_estimators=1000, learning_rate=0.05)
+
+
+# --------------------- 모델성능비교 ---------------------
+model = [lr, lasso, xgb_reg, lgb_reg]
+index = ['MSE', 'RMSE', 'R²']
+score = pd.DataFrame(index=index)
+for m in model:
+    # print(m)
+    m.fit(X_train, y_train)
+    Y_predict = m.predict(X_test)
+    mse = mean_squared_error(y_test, Y_predict)
+    rmse = np.sqrt(mse)
+    r2 = r2_score(y_test,Y_predict)
+    score[m.__class__.__name__] = [mse, rmse, r2]
+    # print(m.__class__.__name__)
+    # print('MSE: {:.3f}, RMSE: {:.3f}'.format(mse, rmse))
+    # print('R²(Variance score):{:.3f}'.format(r2))
+    # print('-------------------------')
+print(score)
+
+
+# --------------------- 모델성능비교 시각화 ---------------------
+fig, (ax0, ax1, ax2) = plt.subplots(3, 1)
+fig.set_size_inches(7, 9)
+sns.barplot(x=score.columns, y=score.loc['MSE'], ax=ax0)
+ax0.set_ylim(0, 15)
+sns.barplot(x=score.columns, y=score.loc['RMSE'], ax=ax1)
+ax1.set_ylim(0, 5)
+sns.barplot(x=score.columns, y=score.loc['R²'], ax=ax2)
+ax2.set_ylim(0, 1.3)
+
+# 그래프 위에 수치 적기
+for i in range(len(score.columns)):
+    for j in range(3):
+        if j == 0:
+            t = ax0.patches[i]
+        # print(i)
+            ax0.text(x=t.get_x() + t.get_width()-0.53, y=t.get_height()+0.3, s='{:.3f}'.format(score.iloc[0, i]))
+        elif j == 1:
+            t = ax1.patches[i]
+            ax1.text(x=t.get_x() + t.get_width()-0.53, y=t.get_height()+0.1, s='{:.3f}'.format(score.iloc[1, i]))
+        else:
+            t = ax2.patches[i]
+            ax2.text(x=t.get_x() + t.get_width()-0.53, y=t.get_height()+0.03, s='{:.3f}'.format(score.iloc[2, i]))
+plt.show()
+
+# XGBoost와 LightGBM이 MSE, RMSE가 낮고 R²이 높아 가장 성능이 좋은(신뢰할 수 있는) 모델이라고 판단
+# 따라서 두 모델 중 하나의 모델을 선택하기 위해 K-교차 검증 진행
+
+
+# --------------------- 검증 ---------------------
+kfold = KFold(10, shuffle=True)
+for m in model:
+    result = cross_val_score(m, X, Y, cv=kfold)
+    print(result)
+    print(m.__class__.__name__, "검증 결과: {:.3f}".format(result.mean()))
+    print('-------------------------')
+
+# 검증해 본 결과 XGBoost가 미세하게 높은 수치를 기록하여 XGBoost로 선택 후 예측 진행
+
+# 가상데이터 샘플
+data = {'유효전력':[79834.10, 68343.123, 58500.101,0], 'A상전압':[2920.14,356.123,397.2544,0], 'B상전압':[571.33,410.9,398.13,0], 'C상전압':[384.23, 382.55,400.231,0], 'A상전류':[248.241, 200.44,0.2423,0], 'B상전류':[171.23, 150.235,0.0423,0], 'C상전류':[150.341, 180.243,0.1332,0], '주파수':[60.0, 59.75,60,0], '역률':[42.8,100.434, 60,0]}
+df_data = pd.DataFrame(data)
+
+# 샘플데이터 예측
+# XGB성능이 가장 좋으므로 XGB 모델로 선택
+print(xgb_reg.predict(df_data))
