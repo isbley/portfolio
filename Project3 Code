@@ -1,4 +1,4 @@
-# 활용 데이터 -- 
+# 활용 데이터 -- https://www.data.go.kr/data/15069826/fileData.do
 
 # 필요한 모듈 불러오기
 import pandas as pd
